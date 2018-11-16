@@ -1,0 +1,102 @@
+进程间通信(IPC)
+	管道:最古老的进程间通信
+	int pipe(int fds[2]);//创建文件描述符, fds:文件描述符,创建成功返回0,失败返回-1
+	fds[0],读取数据,  fds[1],写数据
+
+//创建管道文件(命名)
+	int mkfifo(const char *name, mode_t mode);
+
+//打开管道文件
+	int fd = open(name, O_RDONLY);//读, 此处name是mkfifo出来的名字
+	int fd = open(name, O_WRONLY);//写
+
+//read,write, 语义和匿名管道一致
+
+
+//xxxget(创建), msgsnd(放), msgrcv(取), xxxctl(销毁)
+//查看IPC对象:ipcs
+
+消息队列
+	#include<sys/msg.h>
+	#include<sys/ipc.h>
+
+	int msgget(key_t key, //相当与文件名
+			int flags);// 打开0, 创建IPC_CREAT | 0644
+	返回值:是消息队列的id,相当于文件描述符
+	查看对象:ipcs -q
+	删除IPC对象:ipcrm -Q key
+
+	系统中能创建多少个消息队列, cat /proc/sys/kernel/msgmni
+	一条消息队列能装多少消息, cat /proc/sys/kernel/msgmax
+	一条消息队列中的总字节数, cat /proc/sys/kernel/msgmnb
+
+	往消息队列中发送数据:
+		int msgsnd(int id, //msgget的返回值
+				const char *msgp,//要发送的消息在哪里 
+				size_t len,//消息字节数,不包括channel大小
+				int flag);//标志,一般为0
+		返回值: 成功返回0, 失败返回-1.
+
+		struct msgbuf{
+			long channel;//消息类型(通道号), 必须>=1
+			//随便(数组,结构体任意都可以)
+		};
+
+	从消息队列中取消息
+		ssize_t msgrcv(int id, //队列编号
+						void *mmsgp,//取出的消息放在这
+						size_t len,//装消息的大小,不包括类型
+						long mtype,//取哪个类型(通道)的消息
+						int flag);//一般是0
+			返回值: 失败返回0, 成功返回实际读取的字节数
+				
+共享内存(最快的进程间通信)
+
+	创建或打开共享内存
+		shmget(key_t key,
+				size_t size,//共享内存段的大小
+				int flag);// 创建IPC_CREAT, 打开0
+	
+	让共享内存和本进程建立关系
+		void *shmat(int id, 
+				const char *shmaddr,//想让操作系统挂到这个地址空间,NULL是操作系统自己选择
+				int flag);//flag 填0
+		返回值: 返回值是实际挂载到的虚拟地址的其实位置
+
+		int shmdt(void *shmaddr);//卸载掉共享内存段
+
+	删除共享内存
+		int shmctl(int id, 
+				int cmd, //写IPC_RMID,表示删除删除
+				NULL);
+
+
+信号量集
+
+创建或打开信号量
+	int semget(key_T key, 
+			int nsems,//信号量集中信号量的个数
+			int flags);//打开0, 创建IPC_CREAT|0644
+
+设置信号量初值
+	semctl(semid, 
+			int semnum,//信号量中的第几个信号量
+			int cmd, //SETVAL
+			...)//自定义联合体
+查看信号量的值
+	semctl(semid,
+			int semnum,
+			int cmd,//GETVAL
+			0);
+	返回值是当前信号量的值
+pv操作
+	semop(int semid,
+			struct sembuf sb[],
+			int len);
+
+struct sembuf{
+	short sem_num,//信号量的下标
+	short sem_op, //1 V, -1 P
+	short sem_flag,//一般0
+};
+
